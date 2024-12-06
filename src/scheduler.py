@@ -5,7 +5,7 @@ import schedule
 from backup import runBackup
 
 
-schedule.every().day.at("02:00", "Europe/Berlin").do(runBackup)
+schedule.every().day.at("02:00").do(runBackup)
 
 if os.getenv("INITIAL_RUN","FALSE").lower() == "true":
     runBackup()
