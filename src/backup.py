@@ -7,6 +7,8 @@ import logging
 import paramiko
 import logging.handlers
 
+from dacite import from_dict
+from zipfile import ZipFile
 from datetime import datetime
 from pathlib import Path
 from dataclasses import dataclass, asdict, field
@@ -31,6 +33,8 @@ if VOLUMES_INCLUDE is not None:
 CONTAINER_NOSTOP = os.getenv('CONTAINER_NOSTOP')
 if CONTAINER_NOSTOP is not None:
     dontStopList = CONTAINER_NOSTOP.split(',')
+
+KEEP_BACKUPS = int(os.getenv('KEEP_BACKUPS',5))
 
 
 SFTP_TARGET = os.getenv('SFTP_TARGET')
@@ -152,6 +156,35 @@ def copyViaSftp( src:Path, dst:Path ):
     sftp.put( str(src), str(dst) )
     sftp.close()
 
+def deleteOldBackups( keep:int ):
+    transport = paramiko.Transport((SFTP_HOST, SFTP_PORT))
+    transport.connect(username = SFTP_USER, password = SFTP_PASS)
+    sftp = paramiko.SFTPClient.from_transport(transport)
+    logger.info(f"Connected via sftp to {SFTP_HOST}")
+    sftp.chdir(SFTP_TARGET)
+    backupFiles = sftp.listdir('')
+    backupFiles = [f for f in backupFiles if f.endswith('.zip')]
+    backupInfos = []
+    for backupFile in backupFiles:
+        with sftp.file(backupFile, mode='r') as f:
+            with ZipFile(f,'r') as zf:
+                fileList = zf.filelist
+                try:
+                    zipInfo = [f for f in fileList if f.filename=='backupInfo.json'][0]
+                    backupInfo = from_dict(data_class=BackupInfo, data=json.loads(zf.read(zipInfo)) )
+                    backupInfo.file = backupFile
+                    backupInfos.append(backupInfo)
+                    created = datetime.fromtimestamp(backupInfo.created)
+                    volumeInfo = [f'{v.name} ({v.size})' for v in backupInfo.volumes]
+                    logger.info(f"Found backup file from {created} with volumes {volumeInfo}")
+                except Exception as e:
+                    logger.error(f"Failed to determine backup info for {backupFile}. Error {e}")
+    backupInfos.sort(key=lambda i: i.created)
+    for backup in backupInfos[:-keep]:
+        logger.info(f"Deleting old backup {backup.file} (as we only want to keep the latest {keep})")
+        sftp.remove(backup.file)
+
+
 def runBackup():
     tmpBackupDir = Path(__file__).parent.joinpath('Backup')
     if tmpBackupDir.exists():
@@ -196,6 +229,8 @@ def runBackup():
     sftpTarget = Path(SFTP_TARGET).joinpath(backupArchive.name)
     copyViaSftp(backupArchive, sftpTarget)
 
+    logger.info(f"Cleaning old backups")
+    deleteOldBackups(KEEP_BACKUPS)
 
     runningContainersAfterBackup = [c for c in dockerClient.containers.list(all=True) if c.status=='running']
     logger.info(f"Backup finished. Took {int(time.time()-start)} seconds. Running containers {len(runningContainersAfterBackup)}/{len(runningContainers)}")

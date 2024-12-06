@@ -1,6 +1,6 @@
 # Compose file for local building the image
-# Run with: docker-compose up
-# Force rebuild: docker compose up --build
+# Run with: docker compose -f ./docker-compose-local.yml up
+# Force rebuild: docker compose -f ./docker-compose-local.yml up --build
 services:
   docker-backup:
     image: docker-backup
