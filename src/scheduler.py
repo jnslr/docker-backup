@@ -1,12 +1,14 @@
+import os
 import time
 import schedule
 
 from backup import runBackup
 
 
-schedule.every(1).minutes.do(runBackup)
-#schedule.every(1).seconds.do(lambda:print('hello'))
+schedule.every().day.at("02:00", "Europe/Berlin").do(runBackup)
 
+if os.getenv("INITIAL_RUN","FALSE").lower() == "true":
+    runBackup()
 
 while True:
     schedule.run_pending()
