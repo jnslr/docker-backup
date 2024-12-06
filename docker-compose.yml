@@ -1,0 +1,10 @@
+# Run with: docker-compose up
+# Run and buld: docker compose up --build
+services:
+  docker-backup:
+    image: docker-backup
+    build: .
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/lib/docker/volumes:/var/lib/docker/volumes
+    env_file: ".env"
