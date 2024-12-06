@@ -9,7 +9,7 @@ import logging.handlers
 
 from datetime import datetime
 from pathlib import Path
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from docker import DockerClient
 from docker.models.volumes    import Volume
 from docker.models.containers import Container
@@ -39,6 +39,8 @@ SFTP_USER   = os.getenv('SFTP_USER')
 SFTP_PORT   = int(os.getenv('SFTP_PORT','22'))
 SFTP_PASS   = os.getenv('SFTP_PASS')
 
+ZIP_FORMAT  = 'zip' #gztar
+
 logger = logging.getLogger("PythonBackup")
 fmt    = logging.Formatter('[%(asctime)s][%(levelname)s][%(name)s] %(message)s')
 ch     = logging.StreamHandler()
@@ -53,12 +55,20 @@ logger.info(f"##################################################################
 
 
 @dataclass
-class BackupInfo:
+class VolumeInfo:
+    name:       str
     volumeAttributes:dict
     created:    float
     srcPath:    str
     dstPath:    str
     relDstPath: str
+    size:       int
+
+@dataclass
+class BackupInfo:
+    created: float            = field(default_factory=time.time)
+    volumes: list[VolumeInfo] = field(default_factory=list)
+
 
 def filterVolumes(volumeList:Volume, includeFilter:list[str], excludeFilter:list[str]) -> list[Volume]:
     def filterByExclude(v:Volume):
@@ -106,21 +116,25 @@ def startContainer(container:Container) -> bool:
     if not DRYRUN:
         container.start()
 
-def backupVolume(volume:Volume, backupDir: Path):
+def backupVolume(volume:Volume, backupDir: Path) -> VolumeInfo:
     logger.info(f"Performing backup for volume {volume.name}")
-    infoPath = backupDir.joinpath(f'{volume.name}.json')
-    dstPath  = backupDir.joinpath(volume.name)
-    srcPath  = volume.attrs.get('Mountpoint')
-    backupInfo = BackupInfo(
+    infoPath   = backupDir.joinpath(f'{volume.name}.json')
+    dstPath    = backupDir.joinpath(volume.name)
+    srcPath    = Path(volume.attrs.get('Mountpoint'))
+    volumeSize = sum(p.stat().st_size for p in srcPath.rglob('*'))
+    volumeInfo = VolumeInfo(
+        name = volume.name,
         volumeAttributes=volume.attrs,
         created=time.time(),
-        srcPath=srcPath,
+        srcPath=str(srcPath),
         dstPath=str(dstPath),
-        relDstPath=str(os.path.relpath(dstPath,infoPath.parent))
+        relDstPath=str(os.path.relpath(dstPath,infoPath.parent)),
+        size=volumeSize
     )
-    infoPath.write_text(json.dumps(asdict(backupInfo), indent=4))
-    logger.info(f"Backup info written to {infoPath}")
-    shutil.copytree(srcPath,dstPath)
+    volumeArchive = Path(shutil.make_archive(dstPath, ZIP_FORMAT, '/', srcPath))
+    logger.info(f"Backup archived to {volumeArchive}. Original size: {volumeSize}. Compressed size: {volumeArchive.stat().st_size}")
+    #shutil.copytree(srcPath,dstPath)
+    return volumeInfo
 
 def copyViaSftp( src:Path, dst:Path ):
     transport = paramiko.Transport((SFTP_HOST, SFTP_PORT))
@@ -148,6 +162,8 @@ def runBackup():
     runningContainers = [c for c in allContainers if c.status=='running']
     allVolumes    = dockerClient.volumes.list()
 
+    backupInfo = BackupInfo()
+
     filteredVolumes = filterVolumes(allVolumes,includeList,excludeList)
     logger.info(f"Performing backup on filtered volumes {filteredVolumes}")
     for volume in filteredVolumes:
@@ -161,15 +177,20 @@ def runBackup():
                 stoppedContainers.append(container)
         logger.info(f"{len(stoppedContainers)} containers have been stopped")
         try:
-            backupVolume(volume, tmpBackupDir)
+            volumeInfo = backupVolume(volume, tmpBackupDir)
+            backupInfo.volumes.append(volumeInfo)
         except Exception as e:
             logger.error(f"Error backing up volume {volume.name}: {e}")
         for container in stoppedContainers:
             startContainer(container)
 
+    infoPath = tmpBackupDir.joinpath('backupInfo.json')
+    infoPath.write_text(json.dumps(asdict(backupInfo), indent=4))
+    logger.info(f"Backup info written to {infoPath}")
+
     archiveName = datetime.now().strftime("%y%m%d-%H%M%S-Backup")
     logger.info(f"Create Backup archive {archiveName}")
-    backupArchive = Path(shutil.make_archive(archiveName, 'gztar', tmpBackupDir, ''))
+    backupArchive = Path(shutil.make_archive(archiveName, ZIP_FORMAT, tmpBackupDir, ''))
     shutil.rmtree(tmpBackupDir)
 
     sftpTarget = Path(SFTP_TARGET).joinpath(backupArchive.name)
