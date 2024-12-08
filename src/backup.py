@@ -3,10 +3,9 @@ import os
 import json
 import time
 import shutil
-import logging
 import paramiko
-import logging.handlers
 
+from typing import Self
 from dacite import from_dict
 from zipfile import ZipFile
 from datetime import datetime
@@ -15,6 +14,13 @@ from dataclasses import dataclass, asdict, field
 from docker import DockerClient
 from docker.models.volumes    import Volume
 from docker.models.containers import Container
+
+# Local imports
+from logger import logger, printHeader,printLine
+from definitions import BackupInfo, VolumeBackupInfo, BackupHistory, AppSettings, VolumeInfo
+from settings import loadSettings, saveSettings, loadBackupHistory
+from selfContainerDetect import detectSelfContainer
+
 
 #Settings
 DRYRUN = False
@@ -45,33 +51,69 @@ SFTP_PASS   = os.getenv('SFTP_PASS')
 
 ZIP_FORMAT  = 'zip' #gztar
 
-logger = logging.getLogger("PythonBackup")
-fmt    = logging.Formatter('[%(asctime)s][%(levelname)s][%(name)s] %(message)s')
-ch     = logging.StreamHandler()
-ch.setFormatter(fmt)
-logger.addHandler(ch)
-logger.setLevel(logging.DEBUG)
+settings = loadSettings()
+history  = loadBackupHistory()
 
-start = time.time()
-logger.info(f"######################################################################")
-logger.info(f"Docker Backup service started")
-logger.info(f"######################################################################")
+class BackupCreator():
+    _instance = None
+       
+    @classmethod
+    def getInstance(cls) -> Self:
+        if cls._instance is None:
+            cls._instance = cls()
+        return cls._instance
+
+    def __init__(self):
+        self.reloadSettings()
+        self.m_history      = loadBackupHistory()
+        self.m_dockerClient = DockerClient.from_env()
+    
+    def getHistory(self) -> BackupHistory:
+        return self.m_history
+    
+    def getSettings(self) -> AppSettings:
+        return self.m_settings
+    
+    def reloadSettings(self) -> None:
+        self.m_settings = loadSettings()
+    
+    def updateSettings(self, newSettings:AppSettings) -> None:
+        saveSettings(newSettings)
+        self.reloadSettings()        
+
+    def getVolumes(self) -> list[VolumeInfo]:
+        allContainers = self.m_dockerClient.containers.list()
+        res = []
+        for volume in self.m_dockerClient.volumes.list():           
+            res.append(VolumeInfo(
+                name = volume.name,
+                usedByContainers=[c.name for c in findContainersUsedByVolume(volume,allContainers)]
+                
+            ))
+        return res
 
 
-@dataclass
-class VolumeInfo:
-    name:       str
-    volumeAttributes:dict
-    created:    float
-    srcPath:    str
-    dstPath:    str
-    relDstPath: str
-    size:       int
+# dockerClient = 
+#     allContainers     = dockerClient.containers.list(all=True)
+#     runningContainers = [c for c in allContainers if c.status=='running']
+#     allVolumes    = dockerClient.volumes.list()
 
-@dataclass
-class BackupInfo:
-    created: float            = field(default_factory=time.time)
-    volumes: list[VolumeInfo] = field(default_factory=list)
+
+if __name__=='__main__':
+    from server import startServer
+    start = time.time()
+    printHeader()
+    logger.info(f"Docker Backup service started")
+    printHeader()
+
+
+    selfContainer = detectSelfContainer()
+
+    t = startServer()
+    t.join()
+    exit()
+
+
 
 
 def filterVolumes(volumeList:Volume, includeFilter:list[str], excludeFilter:list[str]) -> list[Volume]:
@@ -120,13 +162,13 @@ def startContainer(container:Container) -> bool:
     if not DRYRUN:
         container.start()
 
-def backupVolume(volume:Volume, backupDir: Path) -> VolumeInfo:
+def backupVolume(volume:Volume, backupDir: Path) -> VolumeBackupInfo:
     logger.info(f"Performing backup for volume {volume.name}")
     infoPath   = backupDir.joinpath(f'{volume.name}.json')
     dstPath    = backupDir.joinpath(volume.name)
     srcPath    = Path(volume.attrs.get('Mountpoint'))
     volumeSize = sum(p.stat().st_size for p in srcPath.rglob('*'))
-    volumeInfo = VolumeInfo(
+    volumeInfo = VolumeBackupInfo(
         name = volume.name,
         volumeAttributes=volume.attrs,
         created=time.time(),

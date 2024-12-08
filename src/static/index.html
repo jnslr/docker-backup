@@ -1,0 +1,83 @@
+<!-- <script src="https://unpkg.com/browse/vue@3.5.13/dist/vue.global.prod.js"></script> -->
+<script src="https://unpkg.com/vue@3.5.13/dist/vue.global.prod.js"></script>
+<script src="https://unpkg.com/cronstrue@latest/dist/cronstrue.min.js" async></script>
+
+<div id="app">
+
+    <div v-if="showAddPage" style="display: flex; flex-direction: column;">
+        <input v-model="newBackup.cronSetting"></input>
+        <span> {{cronHumanString}} </span>
+        
+        <label for="volumes">Choose which volumes to backup</label>
+        <select name="volumes" multiple v-model="newBackupSelectedVolumes">
+            <option v-for="volumeInfo,index in volumeInfos" >{{ volumeInfo.name}}</option>
+        </select>
+
+        
+
+        <button @click="addPage=false">Ok</button>
+    </div>
+    <div v-else>
+        <div v-for="backupSetting in appSettings.backups">
+            {{ backupSetting.cronSetting}}
+        </div>
+        <button @click="showAddBackupPage">Add</button>
+    </div>
+
+    <span>{{newBackup}}</span>
+    <br>
+    <span>{{appSettings}}</span>
+    
+
+</div>
+
+<script>
+    const { createApp } = Vue
+
+    createApp({
+        data() {
+            return {
+                showAddPage: false,
+                appSettings: {},
+                volumeInfos: [],
+                newBackup: {
+                    cronSetting: "* * * * *",
+                    volumeSettings: [],
+                    containerSettings: []
+                },
+                newBackupSelectedVolumes: [],
+                cronValid: false
+            }
+        },
+        async mounted(){
+            console.log('mounted')
+        },
+        methods: {
+            async showAddBackupPage(){
+                const response = await fetch('/api/volumes');
+                this.volumeInfos = await response.json()
+                console.log(this.volumeInfos)
+                this.showAddPage=true
+            },
+            async addBackup(){
+                const response = await fetch('/api/volumes');
+                this.volumeInfos = await response.json()
+                console.log(this.volumeInfos)
+                this.showAddPage=true
+            }
+        },
+        computed: {
+            cronHumanString(){
+                let res = ""
+                try {
+                    res = cronstrue.toString(this.newBackup.cronSetting);
+                    cronValid = true
+                } catch (error) {
+                    res = error
+                    cronValid = false
+                }
+                return res
+            }
+        }
+    }).mount('#app')
+</script>
