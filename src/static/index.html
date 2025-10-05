@@ -27,6 +27,8 @@
     <span>{{newBackup}}</span>
     <br>
     <span>{{appSettings}}</span>
+
+    {{test}}
     
 
 </div>
@@ -34,9 +36,21 @@
 <script>
     const { createApp } = Vue
 
+    class VolumeBackupSettings {
+        volumeName
+        includePaths = ['**/*']
+    }
+
+    class BackupSettings {
+        cronSetting;
+        volumeSettings = [];
+        containerSettings = [];
+    }
+
     createApp({
         data() {
             return {
+                test: new VolumeBackupSettings(),
                 showAddPage: false,
                 appSettings: {},
                 volumeInfos: [],
