@@ -6,7 +6,6 @@ from dataclasses import dataclass, field
 from dacite      import from_dict
 
 
-
 @dataclass
 class VolumeMeta:
     name:             str

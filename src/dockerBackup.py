@@ -8,8 +8,9 @@ from dockerHelper.helper import DockerHelper
 from remotes.helper import RemoteHelper
 from backup.helper import BackupHelper
 from backup.worker import BackupWorker
+from server.server import Server
 
-# #TODO Debug code
+# # #TODO Debug code
 # from dotenv import load_dotenv
 # load_dotenv()
 
@@ -26,6 +27,9 @@ dockerHelper = DockerHelper()
 remoteHelper = RemoteHelper()
 backupHelper = BackupHelper()
 backupWorker = BackupWorker()
+server       = Server()
+
+server.startServer()
 
 
 remoteList = remoteHelper.getRemotes()
@@ -36,9 +40,9 @@ for remote in remoteList:
     logger.info(f'Defined remote: {remote} connectionStatus: {connectionOk}')
 
     if connectionOk:
-        backupInfo = remote.getBackups()
+        remote.updateBackupInfo()
 
-    for path, backup in backupInfo:
+    for path, backup in remote.getBackupInfo():
         created = datetime.datetime.fromtimestamp(backup.created)
         volumeInfo    = [f'    - {v.name} ({v.size*1e-6:.2f} MB)' for v in backup.volumes]
         volumeInfoStr = '\n'.join(volumeInfo)

@@ -8,7 +8,14 @@ from .sftpRemote import SftpRemote
 
 
 class RemoteHelper:
-    def __init__(self):
+    _instance = None
+    def __new__(cls, *args, **kwds):
+        if cls._instance is None:
+            cls._instance = super(RemoteHelper, cls).__new__(cls)
+            cls._instance.init()
+        return cls._instance
+
+    def init(self):
         self.m_logger = logging.getLogger(__name__)
         self.m_remotes = []
 

@@ -28,7 +28,8 @@ class BackupWorker():
         keepCount = self.m_configHelper.getConfig().keepCount
 
         for remote in self.m_remoteHelper.getRemotes():
-            remoteBackups = remote.getBackups()
+            remote.updateBackupInfo()
+            remoteBackups = remote.getBackupInfo()
             remoteBackups.sort(key=lambda i: i[1].created)
             for path, _ in remoteBackups[:-keepCount]:
                 remote.deleteBackup(path)

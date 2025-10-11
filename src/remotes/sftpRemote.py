@@ -19,6 +19,7 @@ class SftpRemote(IRemote):
         self.m_user   = None
         self.m_pass   = None
         self.m_targetDir:Path = None
+        self.m_backupInfo = []
 
     def __str__(self):
         return f'SftpRemote: {self.m_user}@{self.m_host}:{self.m_port} --> {self.m_targetDir}'
@@ -54,6 +55,9 @@ class SftpRemote(IRemote):
 
     # Interface Methods of IRemote
 
+    def getDescriptor(self):
+        return f'sftp: {self.m_user}@{self.m_host}:{self.m_port}'
+
     def testConnection(self) -> bool:
         try:
             sftpClient = self.connect()
@@ -78,8 +82,8 @@ class SftpRemote(IRemote):
         self.m_logger.warning(f'Saving {source} to {self.m_targetDir}')
         return True
     
-    def getBackups(self) -> list[tuple[Path, BackupMeta]]:
-        backupInfos = []
+    def updateBackupInfo(self) -> None:
+        self.m_backupInfo.clear()
 
         try:
             sftpClient = self.connect()
@@ -93,12 +97,13 @@ class SftpRemote(IRemote):
                 backupPath = self.m_targetDir.joinpath(backupFile)
                 with sftpClient.file(backupFile, mode='r') as f:
                     backupInfo = BackupMeta.fromFile(f)
-                    backupInfos.append( (backupPath, backupInfo))
+                    self.m_backupInfo.append( (backupPath, backupInfo))
             sftpClient.close()
         except Exception as e:
             self.m_logger.warning(f'Could not get backups: {e}')
 
-        return backupInfos
+    def getBackupInfo(self) -> list[tuple[Path, BackupMeta]]:
+        return self.m_backupInfo
 
     def deleteBackup(self, path: Path) -> bool:
         try:
