@@ -36,6 +36,8 @@ class BackupHelper:
 
     def createBackup(self, volumeList: list[VolumeBackupInfo]) -> Path:
         self.m_logger.info(f"Starting backup worker")
+        backupStart = time.time()
+
 
         self.cleanTmpBackupDir()
         self.m_tmpBackupDir.mkdir(exist_ok=True, parents=True)
@@ -52,6 +54,9 @@ class BackupHelper:
         self.writeBackupMetadata(backupMeta)
         backupPath = self.compressBackup()
         self.cleanTmpBackupDir()
+
+        durationS = time.time()-backupStart
+        self.m_logger.info(f"Local backup created: {backupPath.name} took {durationS:.2f} seconds")
 
         return backupPath
 
@@ -70,6 +75,7 @@ class BackupHelper:
 
     def processVolumeBackup(self, backupVolume: VolumeBackupInfo) -> VolumeMeta:
         self.m_logger.info(f"Starting Backup for volume {backupVolume.volume.name}")
+        volumeBackupStart = time.time()
         
         volumeMeta = None
         stoppedContainers = self.stopContainersUsedByVolume(backupVolume)
@@ -80,6 +86,9 @@ class BackupHelper:
         
         for container in stoppedContainers:
             self.m_dockerHelper.startContainer(container)
+
+        volumeBackupDuration = time.time() - volumeBackupStart
+        self.m_logger.info(f"Volume backup completed for {backupVolume.volume.name}: took {volumeBackupDuration:.2f} seconds")
         
         return volumeMeta
         

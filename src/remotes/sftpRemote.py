@@ -114,5 +114,5 @@ class SftpRemote(IRemote):
             self.m_logger.warning(f'Delete {path} failed: {e}')
             return False
         
-        self.m_logger.warning(f'Deleted {path}')
+        self.m_logger.info(f'Deleted {path}')
         return True

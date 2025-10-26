@@ -33,3 +33,4 @@ class BackupWorker():
             remoteBackups.sort(key=lambda i: i[1].created)
             for path, _ in remoteBackups[:-keepCount]:
                 remote.deleteBackup(path)
+            remote.updateBackupInfo()
