@@ -24,6 +24,7 @@ class Server():
 
         
         self.m_staticDir = Path(__file__).parent.joinpath('static')
+        self.m_logDir    = Path(__file__).parent.parent.joinpath('log')
         self.addRoutes()
 
         self.m_logger.info('Server initialized')
@@ -39,6 +40,13 @@ class Server():
         @self.m_app.get("/api/config")
         def getConfig():
             return self.m_config.getConfig()
+
+        @self.m_app.get("/api/log")
+        def getConfig():
+            logFiles = self.m_logDir.glob('*.log*')
+            log = [f.read_text() for f in logFiles]
+            log.reverse()
+            return ''.join(log)
         
         @self.m_app.get("/api/backup")
         def getBackup():
@@ -55,4 +63,4 @@ class Server():
             
             return backupList        
         
-        self.m_app.mount("/", StaticFiles(directory=self.m_staticDir), name="static")
+        self.m_app.mount("/", StaticFiles(directory=self.m_staticDir, html=True), name="static")

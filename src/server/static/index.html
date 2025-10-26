@@ -6,225 +6,258 @@
     <title>Docker backup service</title>
 </head>
 <body>
+
+
     <h1>Docker Backup Service Info</h1>
 
-    <h2>Configuration</h2>
+    <div style="display: grid; grid-template-columns: 1fr 4fr; margin: 10px; gap: 5px;">
+        <div>
+            <h2>Configuration</h2>
+            <div id="tableContainer"></div>
 
-    <div id="tableContainer"></div>
+            <h2>History</h2>
+            <div id="historyTable"></div>
+        </div>
+        <div>
+            <textarea disabled id="logs"></textarea>
+        </div>
+    </div>
 
-    <h2>History</h2>
+    <script>
+    const apiUrl = window.location.origin+'/api'
 
-    <div id="historyTable"></div>
+    window.setInterval(updateLogs, 1000)
+    
+    fetch(apiUrl+'/config')
+    .then(async response => {
+        data = await response.json();
+        generateConfigTable(data)
+        console.log(data)
+    })
 
-        <script>
-        const apiUrl = window.location.origin+'/api'
+    fetch(apiUrl+'/history')
+    .then(async response => {
+        data = await response.json();
+        generateBackupTable(data)
+        console.log(data)
+    })
+
+
+
+    // fetch(apiUrl+'/backup')
+    // .then(async response => {
+    //     data = await response.json();
+    //     console.log(data)
+    // })
+
+    function updateLogs()
+    {
+        fetch(apiUrl+'/log')
+        .then(async response => {
+            text = await response.json();
+            
+            const textarea = document.getElementById('logs');
+            textarea.value = text;
+            textarea.style.height = "auto"; // Reset height
+            textarea.style.height = textarea.scrollHeight + "px";
+        })
+    }
+
+    function generateConfigTable(data) {
+        const container = document.getElementById('tableContainer');
         
-        fetch(apiUrl+'/config')
-        .then(async response => {
-            data = await response.json();
-            generateConfigTable(data)
-            console.log(data)
-        })
-
-        fetch(apiUrl+'/history')
-        .then(async response => {
-            data = await response.json();
-            generateBackupTable(data)
-            console.log(data)
-        })
-
-        // fetch(apiUrl+'/backup')
-        // .then(async response => {
-        //     data = await response.json();
-        //     console.log(data)
-        // })
-
-        function generateConfigTable(data) {
-            const container = document.getElementById('tableContainer');
-            
-            // --- 1. Create and populate the main configuration table ---
-            
-            const mainTable = document.createElement('table');
-            mainTable.id = "mainConfigTable";
-            
-            let tbody = document.createElement('tbody');
-            
-            // Add simple key/value pairs
-            for (const key in data) {
-                if (key !== "volumes" && key !== "remotes") {
-                    let row = tbody.insertRow();
-                    row.insertCell().textContent = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()); // Format to readable text
-                    row.insertCell().textContent = data[key];
-                }
-            }
-            
-            mainTable.appendChild(tbody);
-            
-            // --- 2. Add Volumes details as separate rows ---
-            
-            if (data.volumes) {
-                // Volume Include
-                let includeRow = tbody.insertRow();
-                includeRow.insertCell().textContent = "Volumes to Include";
-                includeRow.insertCell().textContent = data.volumes.include.join(', ') || 'None';
-                
-                // Volume Exclude
-                let excludeRow = tbody.insertRow();
-                excludeRow.insertCell().textContent = "Volumes to Exclude";
-                excludeRow.insertCell().textContent = data.volumes.exclude.join(', ') || 'None';
-                
-                // Container No Stop
-                let noStopRow = tbody.insertRow();
-                noStopRow.insertCell().textContent = "Containers Not Stopped";
-                noStopRow.insertCell().textContent = data.volumes.containerNoStop.join(', ') || 'None';
-            }
-            
-            container.appendChild(mainTable);
-            
-            // --- 3. Create a separate table for Remotes (if present) ---
-
-            if (data.remotes && data.remotes.length > 0) {
-                const remoteTable = document.createElement('table');
-                remoteTable.id = "remoteTable";
-                
-                const caption = remoteTable.createCaption();
-                caption.textContent = "Remote Backup Destinations";
-                caption.style.fontWeight = 'bold';
-                
-                // Create table header for remotes
-                let thead = remoteTable.createTHead();
-                let headerRow = thead.insertRow();
-                
-                // Use the keys of the first remote object as headers
-                const headers = Object.keys(data.remotes[0]);
-                headers.forEach(headerText => {
-                    let th = document.createElement('th');
-                    th.textContent = headerText.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
-                    headerRow.appendChild(th);
-                });
-                
-                // Populate table body for remotes
-                let remoteTbody = document.createElement('tbody');
-                data.remotes.forEach(remote => {
-                    let row = remoteTbody.insertRow();
-                    headers.forEach(key => {
-                        let cell = row.insertCell();
-                        let value = remote[key];
-                        
-                        // Mask the password for display
-                        cell.textContent = (key === 'password' && value) ? '********' : value;
-                    });
-                });
-                
-                remoteTable.appendChild(remoteTbody);
-                container.appendChild(remoteTable);
+        // --- 1. Create and populate the main configuration table ---
+        
+        const mainTable = document.createElement('table');
+        mainTable.id = "mainConfigTable";
+        
+        let tbody = document.createElement('tbody');
+        
+        // Add simple key/value pairs
+        for (const key in data) {
+            if (key !== "volumes" && key !== "remotes") {
+                let row = tbody.insertRow();
+                row.insertCell().textContent = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()); // Format to readable text
+                row.insertCell().textContent = data[key];
             }
         }
-
-        // Helper function to format bytes to a readable string (e.g., 93473799 -> 89.14 MB)
-        function formatBytes(bytes, decimals = 2) {
-            if (bytes === 0) return '0 Bytes';
-            const k = 1024;
-            const dm = decimals < 0 ? 0 : decimals;
-            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
-        }
-
-        // Helper function to format Unix timestamp to a readable date/time string
-        function formatTimestamp(timestamp) {
-            if (!timestamp) return 'N/A';
-            // Convert seconds (timestamp) to milliseconds
-            const date = new Date(timestamp * 1000); 
-            return date.toLocaleString();
-        }
-
-        function generateBackupTable(data) {
-            const container = document.getElementById('historyTable');
-            // Clear any previous content
-            container.innerHTML = ''; 
-
-            // Assuming there's only one top-level key (the remote target)
-            const remoteKey = Object.keys(data)[0];
-            const backups = data[remoteKey];
-
-            const table = document.createElement('table');
-            table.classList.add('backup-table');
-
-            // --- Create Table Header ---
-            const thead = table.createTHead();
+        
+        mainTable.appendChild(tbody);
+        
+        // --- 2. Add Volumes details as separate rows ---
+        
+        if (data.volumes) {
+            // Volume Include
+            let includeRow = tbody.insertRow();
+            includeRow.insertCell().textContent = "Volumes to Include";
+            includeRow.insertCell().textContent = data.volumes.include.join(', ') || 'None';
             
-            // Header Row 1: Remote Target
-            let remoteHeaderRow = thead.insertRow();
-            remoteHeaderRow.classList.add('backup-header-row');
-            let remoteHeaderCell = document.createElement('th');
-            remoteHeaderCell.colSpan = 5; // Span across all 5 main columns
-            remoteHeaderCell.textContent = `Remote Target: ${remoteKey}`;
-            remoteHeaderRow.appendChild(remoteHeaderCell);
+            // Volume Exclude
+            let excludeRow = tbody.insertRow();
+            excludeRow.insertCell().textContent = "Volumes to Exclude";
+            excludeRow.insertCell().textContent = data.volumes.exclude.join(', ') || 'None';
             
-            // Header Row 2: Column Headers
+            // Container No Stop
+            let noStopRow = tbody.insertRow();
+            noStopRow.insertCell().textContent = "Containers Not Stopped";
+            noStopRow.insertCell().textContent = data.volumes.containerNoStop.join(', ') || 'None';
+        }
+        
+        container.appendChild(mainTable);
+        
+        // --- 3. Create a separate table for Remotes (if present) ---
+
+        if (data.remotes && data.remotes.length > 0) {
+            const remoteTable = document.createElement('table');
+            remoteTable.id = "remoteTable";
+            
+            const caption = remoteTable.createCaption();
+            caption.textContent = "Remote Backup Destinations";
+            caption.style.fontWeight = 'bold';
+            
+            // Create table header for remotes
+            let thead = remoteTable.createTHead();
             let headerRow = thead.insertRow();
-            ['Backup File', 'Backup Time', 'Volume Name', 'Volume Size', 'Status'].forEach(text => {
+            
+            // Use the keys of the first remote object as headers
+            const headers = Object.keys(data.remotes[0]);
+            headers.forEach(headerText => {
                 let th = document.createElement('th');
-                th.textContent = text;
+                th.textContent = headerText.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
                 headerRow.appendChild(th);
             });
-
-            // --- Create Table Body ---
-            const tbody = document.createElement('tbody');
-
-            backups.forEach((backup, backupIndex) => {
-                const filePath = backup[0];
-                const details = backup[1];
-                const volumes = details.volumes;
-                const backupTime = formatTimestamp(details.created);
-
-                // Calculate the total number of rows for this backup (1 row per volume)
-                const rowSpan = volumes.length;
-
-                volumes.forEach((volume, volumeIndex) => {
-                    const row = tbody.insertRow();
-                    row.classList.add('volume-detail-row');
+            
+            // Populate table body for remotes
+            let remoteTbody = document.createElement('tbody');
+            data.remotes.forEach(remote => {
+                let row = remoteTbody.insertRow();
+                headers.forEach(key => {
+                    let cell = row.insertCell();
+                    let value = remote[key];
                     
-                    // --- File Path Cell ---
-                    // Only add this cell to the first row of the backup set (rowSpan)
-                    if (volumeIndex === 0) {
-                        let fileCell = row.insertCell();
-                        fileCell.textContent = filePath;
-                        fileCell.rowSpan = rowSpan;
-                    }
-
-                    // --- Backup Time Cell ---
-                    // Only add this cell to the first row of the backup set (rowSpan)
-                    if (volumeIndex === 0) {
-                        let timeCell = row.insertCell();
-                        timeCell.textContent = backupTime;
-                        timeCell.rowSpan = rowSpan;
-                    }
-                    
-                    // --- Volume Name Cell ---
-                    row.insertCell().textContent = volume.name;
-
-                    // --- Volume Size Cell ---
-                    row.insertCell().textContent = formatBytes(volume.size);
-
-                    // --- Status/Error Cell ---
-                    let statusCell = row.insertCell();
-                    if (volume.error) {
-                        statusCell.innerHTML = `<span class="error-message">❌ Error: ${volume.error.substring(0, 30)}...</span>`;
-                    } else {
-                        statusCell.textContent = '✅ Success';
-                    }
+                    // Mask the password for display
+                    cell.textContent = (key === 'password' && value) ? '********' : value;
                 });
             });
-
-            table.appendChild(tbody);
-            container.appendChild(table);
+            
+            remoteTable.appendChild(remoteTbody);
+            container.appendChild(remoteTable);
         }
-        </script>
+    }
+
+    // Helper function to format bytes to a readable string (e.g., 93473799 -> 89.14 MB)
+    function formatBytes(bytes, decimals = 2) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const dm = decimals < 0 ? 0 : decimals;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+    }
+
+    // Helper function to format Unix timestamp to a readable date/time string
+    function formatTimestamp(timestamp) {
+        if (!timestamp) return 'N/A';
+        // Convert seconds (timestamp) to milliseconds
+        const date = new Date(timestamp * 1000); 
+        return date.toLocaleString();
+    }
+
+    function generateBackupTable(data) {
+        const container = document.getElementById('historyTable');
+        // Clear any previous content
+        container.innerHTML = ''; 
+
+        // Assuming there's only one top-level key (the remote target)
+        const remoteKey = Object.keys(data)[0];
+        const backups = data[remoteKey];
+
+        backups.sort( (a,b) =>  a.created - b.created)
+
+        const table = document.createElement('table');
+        table.classList.add('backup-table');
+
+        // --- Create Table Header ---
+        const thead = table.createTHead();
+        
+        // Header Row 1: Remote Target
+        let remoteHeaderRow = thead.insertRow();
+        remoteHeaderRow.classList.add('backup-header-row');
+        let remoteHeaderCell = document.createElement('th');
+        remoteHeaderCell.colSpan = 5; // Span across all 5 main columns
+        remoteHeaderCell.textContent = `Remote Target: ${remoteKey}`;
+        remoteHeaderRow.appendChild(remoteHeaderCell);
+        
+        // Header Row 2: Column Headers
+        let headerRow = thead.insertRow();
+        ['Backup File', 'Backup Time', 'Volume Name', 'Volume Size', 'Status'].forEach(text => {
+            let th = document.createElement('th');
+            th.textContent = text;
+            headerRow.appendChild(th);
+        });
+
+        // --- Create Table Body ---
+        const tbody = document.createElement('tbody');
+
+        backups.forEach((backup, backupIndex) => {
+            const filePath = backup[0];
+            const details = backup[1];
+            const volumes = details.volumes;
+            const backupTime = formatTimestamp(details.created);
+
+            // Calculate the total number of rows for this backup (1 row per volume)
+            const rowSpan = volumes.length;
+
+            volumes.forEach((volume, volumeIndex) => {
+                const row = tbody.insertRow();
+                row.classList.add('volume-detail-row');
+                
+                // --- File Path Cell ---
+                // Only add this cell to the first row of the backup set (rowSpan)
+                if (volumeIndex === 0) {
+                    let fileCell = row.insertCell();
+                    fileCell.textContent = filePath;
+                    fileCell.rowSpan = rowSpan;
+                }
+
+                // --- Backup Time Cell ---
+                // Only add this cell to the first row of the backup set (rowSpan)
+                if (volumeIndex === 0) {
+                    let timeCell = row.insertCell();
+                    timeCell.textContent = backupTime;
+                    timeCell.rowSpan = rowSpan;
+                }
+                
+                // --- Volume Name Cell ---
+                row.insertCell().textContent = volume.name;
+
+                // --- Volume Size Cell ---
+                row.insertCell().textContent = formatBytes(volume.size);
+
+                // --- Status/Error Cell ---
+                let statusCell = row.insertCell();
+                if (volume.error) {
+                    statusCell.innerHTML = `<span class="error-message">❌ Error: ${volume.error.substring(0, 30)}...</span>`;
+                } else {
+                    statusCell.textContent = '✅ Success';
+                }
+            });
+        });
+
+        table.appendChild(tbody);
+        container.appendChild(table);
+    }
+    </script>
 </body>
 
 <style>
+    textarea {
+        width: 100%;
+        resize: none;
+        min-height: 50px;
+        overflow: hidden;
+        font-family: monospace;
+    }
     table {
         width: 80%;
         border-collapse: collapse;
