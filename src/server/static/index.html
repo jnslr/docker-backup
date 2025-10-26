@@ -12,6 +12,9 @@
 
     <div style="display: grid; grid-template-columns: 1fr 4fr; margin: 10px; gap: 5px;">
         <div>
+            <h2>Control</h2>
+            <button onclick="runBackup()">Run manually</button>
+
             <h2>Configuration</h2>
             <div id="tableContainer"></div>
 
@@ -49,6 +52,14 @@
     //     data = await response.json();
     //     console.log(data)
     // })
+
+    function runBackup()
+    {
+        fetch(apiUrl+'/backup/run', {method:'POST'})
+        .then(async response => {
+            console.log("Backup started: ", response.status)
+        })
+    }
 
     function updateLogs()
     {

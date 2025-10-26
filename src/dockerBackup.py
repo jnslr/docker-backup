@@ -3,6 +3,8 @@ import datetime
 import time
 import schedule
 
+from pathlib import Path
+
 from config.config import ConfigHelper
 from dockerHelper.helper import DockerHelper
 from remotes.helper import RemoteHelper
@@ -14,7 +16,14 @@ from server.server import Server
 # from dotenv import load_dotenv
 # load_dotenv()
 
-logging.basicConfig(handlers=[logging.StreamHandler()], format=logging.BASIC_FORMAT, level=logging.INFO)
+logDir = Path(__file__).parent.joinpath('log')
+logDir.mkdir(exist_ok=True)
+
+streamHandler = logging.StreamHandler()
+fileHandler   = logging.handlers.RotatingFileHandler(logDir.joinpath('backup.log'), maxBytes=256e3, backupCount=1)
+fileHandler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s:%(name)s:%(message)s"))
+
+logging.basicConfig(handlers=[streamHandler, fileHandler], format=logging.BASIC_FORMAT, level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -60,10 +69,10 @@ for v in backupInfo:
 
 
 
-schedule.every(3).days.at("02:00").do(backupWorker.DoBackup)
+schedule.every(3).days.at("02:00").do(backupWorker.StartBackup)
 
 if configHelper.getConfig().initialRun:
-    BackupWorker().DoBackup()
+    backupWorker.StartBackup()
 
 while True:
     schedule.run_pending()

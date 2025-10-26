@@ -6,6 +6,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
+from backup.worker import BackupWorker
 from config.config import ConfigHelper
 from dockerHelper.helper import DockerHelper
 from remotes.helper import RemoteHelper
@@ -18,6 +19,7 @@ class Server():
         self.m_thread = None
         self.m_app = FastAPI()
 
+        self.m_backup = BackupWorker()
         self.m_config = ConfigHelper()
         self.m_docker = DockerHelper()
         self.m_remote = RemoteHelper()
@@ -51,6 +53,10 @@ class Server():
         @self.m_app.get("/api/backup")
         def getBackup():
             return self.m_docker.getBackupList()
+
+        @self.m_app.post("/api/backup/run")
+        def runBackup():
+            return self.m_backup.StartBackup()
         
         @self.m_app.get("/api/history")
         def getRemoteBackups():

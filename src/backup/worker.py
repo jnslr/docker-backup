@@ -1,4 +1,7 @@
+import logging
+
 from pathlib import Path
+from threading import Thread, Event
 
 from .helper import BackupHelper
 from remotes.helper import RemoteHelper
@@ -6,12 +9,35 @@ from dockerHelper.helper import DockerHelper
 from config.config import ConfigHelper
 
 class BackupWorker():
-    def __init__(self):
+    _instance = None
+    def __new__(cls, *args, **kwds):
+        if cls._instance is None:
+            cls._instance = super(BackupWorker, cls).__new__(cls)
+            cls._instance.init()
+        return cls._instance
+
+    def init(self):
+        self.m_logger = logging.getLogger(__name__)
+
         self.m_backupHelper  = BackupHelper()
         self.m_remoteHelper  = RemoteHelper()
         self.m_dockerHelper  = DockerHelper()
         self.m_configHelper  = ConfigHelper()
+        
+        self.m_runEvent = Event()
+        self.m_thread = Thread(target=self.Run, daemon=True, name="BackupWorker")
+        self.m_thread.start()
 
+    def Run(self):
+        self.m_logger.info("Backup worker thread started")
+        while True:
+            self.m_runEvent.wait()
+            self.m_logger.info("Backup worker thread: StartBackup")
+            self.DoBackup()
+            self.m_runEvent.clear()
+
+    def StartBackup(self):
+        self.m_runEvent.set()
 
     def DoBackup(self):
         backupList = self.m_dockerHelper.getBackupList()
