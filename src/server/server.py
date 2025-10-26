@@ -11,6 +11,7 @@ from config.config import ConfigHelper
 from dockerHelper.helper import DockerHelper
 from remotes.helper import RemoteHelper
 
+from definitions.backupState import BackupState
 from definitions.backupConfig import BackupConfig
 
 class Server():
@@ -23,6 +24,7 @@ class Server():
         self.m_config = ConfigHelper()
         self.m_docker = DockerHelper()
         self.m_remote = RemoteHelper()
+        self.m_state  = BackupState()
 
         
         self.m_staticDir = Path(__file__).parent.joinpath('static')
@@ -53,6 +55,10 @@ class Server():
         @self.m_app.get("/api/backup")
         def getBackup():
             return self.m_docker.getBackupList()
+        
+        @self.m_app.get("/api/state")
+        def getState():
+            return self.m_state
 
         @self.m_app.post("/api/backup/run")
         def runBackup():

@@ -15,6 +15,7 @@ from docker.models.containers import Container
 from dockerHelper.helper import DockerHelper
 from definitions.backupList import VolumeBackupInfo
 from definitions.backupMeta import BackupMeta, VolumeMeta
+from definitions.backupState import BackupState, State
 
 class BackupHelper:
 
@@ -25,6 +26,7 @@ class BackupHelper:
         self.m_zipFormat    = 'zip' #gztar
         self.m_tmpDir       = Path(__file__).parent.parent.joinpath('tmp')
         self.m_tmpBackupDir = self.m_tmpDir.joinpath('backup')
+        self.m_state        = BackupState()
 
     def cleanTmpBackupDir(self):
         if self.m_tmpBackupDir.exists():
@@ -36,8 +38,9 @@ class BackupHelper:
 
     def createBackup(self, volumeList: list[VolumeBackupInfo]) -> Path:
         self.m_logger.info(f"Starting backup worker")
-        backupStart = time.time()
-
+        
+        self.m_state.state     = State.BACKUP_COMPRESS_VOLUME
+        self.m_state.lastStart = time.time()
 
         self.cleanTmpBackupDir()
         self.m_tmpBackupDir.mkdir(exist_ok=True, parents=True)
@@ -46,17 +49,24 @@ class BackupHelper:
 
         backupMeta = BackupMeta()
 
-        for v in volumesToProcess:
+        for i,v in enumerate(volumesToProcess):
+            self.m_state.currentVolume = v.volume.name
+            self.m_state.currentVolumeProgress = int(i/len(volumesToProcess)*100)
+
             self.stopContainersUsedByVolume(v)
             volumeMeta = self.processVolumeBackup(v)
             backupMeta.volumes.append(volumeMeta)
 
+        self.m_state.currentVolume         = None
+        self.m_state.currentVolumeProgress = None
+        
+        
         self.writeBackupMetadata(backupMeta)
         backupPath = self.compressBackup()
         self.cleanTmpBackupDir()
 
-        durationS = time.time()-backupStart
-        self.m_logger.info(f"Local backup created: {backupPath.name} took {durationS:.2f} seconds")
+        self.m_state.lastDuration = time.time() - self.m_state.lastStart
+        self.m_logger.info(f"Local backup created: {backupPath.name} took {self.m_state.lastDuration:.2f} seconds")
 
         return backupPath
 
@@ -66,6 +76,8 @@ class BackupHelper:
         self.m_logger.info(f"Backup info written to {metaPath}")
 
     def compressBackup(self) -> Path:
+        self.m_state.state     = State.BACKUP_CREATE_FILE
+
         archiveName = datetime.now().strftime("%y%m%d-%H%M%S-Backup")
         archivePath = self.m_tmpDir.joinpath(archiveName)
         self.m_logger.info(f"Create Backup archive {archiveName}")
@@ -121,6 +133,7 @@ class BackupHelper:
         )
         try:
             volumeMeta.size = sum(p.stat().st_size for p in srcPath.rglob('*'))
+            self.m_logger.setLevel(logging.DEBUG)
             volumeArchive = Path(shutil.make_archive(dstPath, self.m_zipFormat, '/', srcPath))
             self.m_logger.info(f"Backup archived to {volumeArchive}. Original size: {volumeMeta.size}. Compressed size: {volumeArchive.stat().st_size}")
         except Exception as e:

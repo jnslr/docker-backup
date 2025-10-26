@@ -22,6 +22,11 @@
             <div id="historyTable"></div>
         </div>
         <div>
+            <h2>State</h2>
+            <div id="state"></div>
+
+
+            <h2>Logs</h2>
             <textarea disabled id="logs"></textarea>
         </div>
     </div>
@@ -30,6 +35,7 @@
     const apiUrl = window.location.origin+'/api'
 
     window.setInterval(updateLogs, 1000)
+    window.setInterval(updateState, 1000)
     
     fetch(apiUrl+'/config')
     .then(async response => {
@@ -47,11 +53,21 @@
 
 
 
+
     // fetch(apiUrl+'/backup')
     // .then(async response => {
     //     data = await response.json();
     //     console.log(data)
     // })
+
+    function updateState()
+    {
+        fetch(apiUrl+'/state')
+        .then(async response => {
+            data = await response.json();
+            updateStateDiv(data)
+        })
+    }
 
     function runBackup()
     {
@@ -72,6 +88,39 @@
             textarea.style.height = "auto"; // Reset height
             textarea.style.height = textarea.scrollHeight + "px";
         })
+    }
+
+    function updateStateDiv(data)
+    {
+        const outputDiv = document.getElementById("state");
+        while (outputDiv.firstChild)
+        {
+            outputDiv.removeChild(outputDiv.firstChild)
+        }
+
+        for (const [key, value] of Object.entries(data))
+        {
+            const entry = document.createElement("div");
+
+            const keySpan = document.createElement("span");
+            keySpan.textContent = `${key}: `;
+
+            const valueSpan = document.createElement("span");
+
+            if (key=='lastStart')
+            {
+                valueSpan.textContent = formatTimestamp(value);
+            }
+            else
+            {
+                valueSpan.textContent = value !== null ? value : "null";
+            }
+            
+
+            entry.appendChild(keySpan);
+            entry.appendChild(valueSpan);
+            outputDiv.appendChild(entry);
+        }
     }
 
     function generateConfigTable(data) {
