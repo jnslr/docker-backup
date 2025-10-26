@@ -2,7 +2,7 @@
 # Run with: docker compose -f ./docker-compose-develop.yml up
 # Force rebuild: docker compose -f ./docker-compose-develop.yml up --build
 services:
-  docker-backup:
+  docker-backup-develop:
     image: docker-backup
     container_name: "docker-backup-develop"
     build: .
